@@ -1,0 +1,8 @@
+# Ignore data directory
+data/
+.venv/
+__pycache__/
+dataset/
+runs/
+.DS_Store
+*.DS_Store
