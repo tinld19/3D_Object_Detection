@@ -40,7 +40,7 @@ The 3D model is intentionally separate from RF-DETR. It freezes the 256-channel 
 python train_3d.py --rfdetr-checkpoint runs/rfdetr-kitti/checkpoint_best_total.pth --epochs 30
 ```
 
-The RF-DETR checkpoint is required and is loaded only as a frozen feature extractor. Foreground depth uses 80 LID bins over 2–60 m plus a background bin; no full-scene pretrained depth estimator is used. The resulting `runs/monocular-3d/best.pt` stores the 3D head weights, class names, normalisation statistics, depth settings, and checkpoint path. It uses MPS when supported, otherwise CPU. No 3D training is run automatically.
+The RF-DETR checkpoint is required and is loaded only as a frozen feature extractor. Foreground depth uses 80 LID bins over 2–60 m plus a background bin; no full-scene pretrained depth estimator is used. The resulting `runs/monocular-3d/best.pt` stores the 3D head weights, class names, normalisation statistics, depth settings, and checkpoint path. It selects CUDA, then MPS, then CPU unless `--device` is specified. No 3D training is run automatically.
 
 ## Verify conversion
 

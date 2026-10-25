@@ -15,6 +15,8 @@ from monocular_3d import (
 def device() -> str:
     import torch
 
+    if torch.cuda.is_available():
+        return "cuda"
     return "mps" if torch.backends.mps.is_available() else "cpu"
 
 
@@ -35,7 +37,7 @@ def main() -> None:
     parser.add_argument("--depth-loss-weight", type=float, default=1.0)
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--device", choices=("mps", "cpu"))
+    parser.add_argument("--device", choices=("cuda", "mps", "cpu"))
     args = parser.parse_args()
     try:
         import torch
