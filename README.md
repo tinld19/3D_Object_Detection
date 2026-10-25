@@ -25,20 +25,22 @@ Use `--output-dir` to write elsewhere. Source data is never changed.
 ## Train
 
 ```bash
-python train.py --epochs 50 --batch-size 2
+python train.py --epochs 50 --batch-size 8 --device cuda --num-workers 4
 ```
 
 On Apple Silicon, the script selects MPS when available; otherwise it uses CPU. Override it explicitly with `--device mps` or `--device cpu`. CPU training is supported but will be slow. Training output defaults to `runs/rfdetr-kitti/`.
 
+Early stopping monitors validation box mAP and stops after 15 epochs without improvement. The default `rich` progress bar displays training status; use `--progress-bar tqdm` or `--progress-bar none` to change it. RF-DETR Nano's default is 384×384. MonoDETR's KITTI setting is 1280×384, which RF-DETR cannot reproduce with its scalar `resolution` option; `--resolution 1280 --batch-size 1` is only a high-resolution square experiment, not a directly comparable MonoDETR baseline.
+
 ## Train monocular 3D
 
-The 3D model is intentionally separate from RF-DETR: it learns KITTI `h,w,l,x,y,z,rotation_y` from each object crop, its 2D box, class, and camera `P2` intrinsics. It is the supervised monocular 3D stage to run after the 2D detector.
+The 3D model is intentionally separate from RF-DETR. It freezes the 256-channel projected DINOv2 map from a fine-tuned RF-DETR Nano checkpoint, learns a MonoDETR-style foreground depth-bin map, and fuses the RGB/depth ROI features with the 2D box, class, and camera `P2` intrinsics to predict KITTI `h,w,l,x,y,z,rotation_y`.
 
 ```bash
-python train_3d.py --epochs 30 --batch-size 8
+python train_3d.py --rfdetr-checkpoint runs/rfdetr-kitti/checkpoint_best_total.pth --epochs 30
 ```
 
-The resulting `runs/monocular-3d/best.pt` stores weights, class names, and target-normalisation statistics. It uses MPS when supported, otherwise CPU. No 3D training is run automatically.
+The RF-DETR checkpoint is required and is loaded only as a frozen feature extractor. Foreground depth uses 80 LID bins over 2–60 m plus a background bin; no full-scene pretrained depth estimator is used. The resulting `runs/monocular-3d/best.pt` stores the 3D head weights, class names, normalisation statistics, depth settings, and checkpoint path. It uses MPS when supported, otherwise CPU. No 3D training is run automatically.
 
 ## Verify conversion
 

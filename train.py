@@ -7,7 +7,7 @@ from pathlib import Path
 def device() -> str:
     import torch
 
-    return "mps" if torch.backends.mps.is_available() else "cpu"
+    return "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
 
 
 def main() -> None:
@@ -18,7 +18,9 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--resolution", type=int, default=384)
-    parser.add_argument("--device", choices=("mps", "cpu"))
+    parser.add_argument("--early-stopping-patience", type=int, default=15)
+    parser.add_argument("--progress-bar", choices=("rich", "tqdm", "none"), default="rich")
+    parser.add_argument("--device", choices=("cuda", "mps", "cpu"))
     args = parser.parse_args()
     try:
         from rfdetr import RFDETRNano
@@ -33,6 +35,9 @@ def main() -> None:
         num_workers=args.num_workers,
         resolution=args.resolution,
         device=args.device or device(),
+        early_stopping=True,
+        early_stopping_patience=args.early_stopping_patience,
+        progress_bar=None if args.progress_bar == "none" else args.progress_bar,
     )
 
 
