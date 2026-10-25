@@ -42,6 +42,22 @@ python train_3d.py --rfdetr-checkpoint runs/rfdetr-kitti/checkpoint_best_total.p
 
 The RF-DETR checkpoint is required and is loaded only as a frozen feature extractor. Foreground depth uses 80 LID bins over 2–60 m plus a background bin; no full-scene pretrained depth estimator is used. The resulting `runs/monocular-3d/best.pt` stores the 3D head weights, class names, normalisation statistics, depth settings, and checkpoint path. It selects CUDA, then MPS, then CPU unless `--device` is specified. No 3D training is run automatically.
 
+## Visualize 3D inference
+
+Use a raw KITTI image and its matching calibration file. The script gets 2D proposals from RF-DETR, runs the trained 3D head, and projects each predicted 3D cuboid on the original image.
+
+```bash
+python infer_3d.py \
+  --image data/kitti_raw/KITTI/training/image_2/000000.png \
+  --calib data/kitti_raw/KITTI/training/calib/000000.txt \
+  --rfdetr-checkpoint runs/rfdetr-kitti/checkpoint_best_ema.pth \
+  --3d-checkpoint runs/monocular-3d/smoke.pt \
+  --device cuda \
+  --output runs/monocular-3d/inference-000000.png
+```
+
+Only detector classes represented in the 3D checkpoint are rendered. A first-epoch `smoke.pt` is only a pipeline check; train the 3D stage longer before interpreting cuboid quality.
+
 ## Verify conversion
 
 ```bash
