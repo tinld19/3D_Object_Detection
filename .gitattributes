@@ -1,0 +1,2 @@
+runs/**/*.pth filter=lfs diff=lfs merge=lfs -text
+runs/**/*.pt filter=lfs diff=lfs merge=lfs -text
