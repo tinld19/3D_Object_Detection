@@ -71,3 +71,42 @@ def iou_3d(a, b):
         return float(inter / union)
     except Exception:
         return 0.0
+
+
+NEIGHBOURS = {"Car": {"Van"}, "Pedestrian": {"Person_sitting"}, "Cyclist": set()}
+
+
+def match_image(preds, gts, iou_fn, iou_thr, difficulty, eval_class, neighbours):
+    """Greedy KITTI matching within one image.
+
+    Returns (scored_flags, num_valid_gt). Preds matching a neighbour-class GT
+    or an ignored/too-hard eval-class GT are dropped (don't-care); unmatched
+    preds are FP.
+    """
+    nbr = neighbours.get(eval_class, set())
+
+    def is_valid(g):
+        return (g["class"] == eval_class and g["difficulty"] is not None
+                and g["difficulty"] <= difficulty)
+
+    candidates = [i for i, g in enumerate(gts)
+                  if g["class"] == eval_class or g["class"] in nbr]
+    num_valid_gt = sum(1 for g in gts if is_valid(g))
+    used = set()
+    flags = []
+    for pred in sorted(preds, key=lambda p: p["score"], reverse=True):
+        best, best_iou = None, iou_thr
+        for i in candidates:
+            if i in used:
+                continue
+            iou = iou_fn(pred["box"], gts[i]["box"])
+            if iou >= best_iou:
+                best, best_iou = i, iou
+        if best is None:
+            flags.append((pred["score"], False))
+            continue
+        used.add(best)
+        if is_valid(gts[best]):
+            flags.append((pred["score"], True))
+        # otherwise don't-care: pred removed
+    return flags, num_valid_gt

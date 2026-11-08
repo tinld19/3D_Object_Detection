@@ -51,5 +51,39 @@ class TestObjectDifficulty(unittest.TestCase):
         self.assertIsNone(kitti_eval.object_difficulty(50, 0, 0.60))
 
 
+class TestMatchImage(unittest.TestCase):
+    HIT = (0.0, 10.0, 4.0, 2.0, 0.0)
+    FAR = (50.0, 50.0, 4.0, 2.0, 0.0)
+
+    def _match(self, preds, gts):
+        return kitti_eval.match_image(
+            preds, gts, kitti_eval.bev_iou, 0.7, 0, "Car", kitti_eval.NEIGHBOURS)
+
+    def test_match_counts_tp_and_fp(self):
+        gts = [{"box": self.HIT, "class": "Car", "difficulty": 0}]
+        preds = [{"score": 0.9, "box": self.HIT}, {"score": 0.4, "box": self.FAR}]
+        flags, n = self._match(preds, gts)
+        self.assertEqual(flags, [(0.9, True), (0.4, False)])
+        self.assertEqual(n, 1)
+
+    def test_match_on_neighbour_is_dontcare(self):
+        gts = [{"box": self.HIT, "class": "Van", "difficulty": 0}]
+        flags, n = self._match([{"score": 0.9, "box": self.HIT}], gts)
+        self.assertEqual(flags, [])
+        self.assertEqual(n, 0)
+
+    def test_match_on_other_class_is_fp(self):
+        gts = [{"box": self.HIT, "class": "Truck", "difficulty": 0}]
+        flags, n = self._match([{"score": 0.9, "box": self.HIT}], gts)
+        self.assertEqual(flags, [(0.9, False)])
+        self.assertEqual(n, 0)
+
+    def test_match_ignores_too_hard_gt(self):
+        gts = [{"box": self.HIT, "class": "Car", "difficulty": None}]
+        flags, n = self._match([{"score": 0.9, "box": self.HIT}], gts)
+        self.assertEqual(flags, [])
+        self.assertEqual(n, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
