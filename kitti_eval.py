@@ -113,3 +113,72 @@ def match_image(preds, gts, iou_fn, iou_thr, difficulty, eval_class, neighbours)
             flags.append((pred["score"], False))
         # else don't-care: pred removed
     return flags, num_valid_gt
+
+
+def ap40(scored_flags, num_valid_gt):
+    """AP|R40: mean over recall targets k/40 (k=1..40, recall 0 excluded) of
+    the monotone-interpolated precision (max precision at recall >= target).
+
+    scored_flags: pooled (score, is_tp) over all images; sorted by score
+    descending here. NaN if num_valid_gt == 0.
+    """
+    if num_valid_gt == 0:
+        return float("nan")
+    flags = sorted(scored_flags, key=lambda f: f[0], reverse=True)
+    points = []  # (recall, precision) per operating point
+    tp = fp = 0
+    for _, is_tp in flags:
+        if is_tp:
+            tp += 1
+        else:
+            fp += 1
+        points.append((tp / num_valid_gt, tp / (tp + fp)))
+    total = 0.0
+    for k in range(1, 41):
+        target = k / 40 - 1e-9
+        total += max((p for r, p in points if r >= target), default=0.0)
+    return total / 40
+
+
+_LEVELS = {"easy": 0, "moderate": 1, "hard": 2}
+
+
+def _to_bev(box7):
+    h, w, l, x, y, z, ry = box7
+    return (x, z, l, w, ry)
+
+
+def evaluate(images, classes, iou_thresholds, metrics):
+    """result[class][metric][iou_thr][difficulty_name] = AP40.
+
+    images: list of {"preds": [{score, box7, class}], "gts": [{box7, class,
+    difficulty}]} with box7 = (h, w, l, x, y, z, ry).
+    """
+    result = {}
+    for cls in classes:
+        result[cls] = {}
+        for metric in metrics:
+            if metric == "3d":
+                iou_fn, conv = iou_3d, (lambda b: b)
+            elif metric == "bev":
+                iou_fn, conv = bev_iou, _to_bev
+            else:
+                raise ValueError(f"unknown metric {metric}")
+            per_img = [
+                ([{"score": p["score"], "box": conv(p["box"])}
+                  for p in im["preds"] if p["class"] == cls],
+                 [{"box": conv(g["box"]), "class": g["class"],
+                   "difficulty": g["difficulty"]} for g in im["gts"]])
+                for im in images]
+            result[cls][metric] = {}
+            for thr in iou_thresholds[cls]:
+                result[cls][metric][thr] = {}
+                for name, level in _LEVELS.items():
+                    flags, n = [], 0
+                    for preds, gts in per_img:
+                        f, ng = match_image(preds, gts, iou_fn, thr, level,
+                                            cls, NEIGHBOURS)
+                        flags.extend(f)
+                        n += ng
+                    result[cls][metric][thr][name] = ap40(flags, n)
+    return result

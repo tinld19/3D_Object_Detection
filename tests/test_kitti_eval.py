@@ -108,5 +108,44 @@ class TestMatchImage(unittest.TestCase):
         self.assertEqual(n, 1)
 
 
+class TestAP40(unittest.TestCase):
+    def test_ap40_perfect_is_one(self):
+        flags = [(1 - i / 100, True) for i in range(5)]
+        self.assertAlmostEqual(kitti_eval.ap40(flags, 5), 1.0)
+
+    def test_ap40_half_recall(self):
+        self.assertAlmostEqual(kitti_eval.ap40([(0.9, True)], 2), 0.5)
+
+    def test_ap40_fp_before_tp(self):
+        self.assertAlmostEqual(
+            kitti_eval.ap40([(0.95, False), (0.9, True)], 1), 0.5)
+
+    def test_ap40_no_gt_is_nan(self):
+        import math
+        self.assertTrue(math.isnan(kitti_eval.ap40([(0.9, True)], 0)))
+
+
+class TestEvaluate(unittest.TestCase):
+    def test_evaluate_shape_and_values(self):
+        box = (1.5, 2.0, 4.0, 0.0, 1.5, 10.0, 0.0)
+        far = (1.5, 2.0, 4.0, 30.0, 1.5, 10.0, 0.0)
+        img1 = {"preds": [{"score": 0.9, "box": box, "class": "Car"}],
+                "gts": [{"box": box, "class": "Car", "difficulty": 0}]}
+        img2 = {"preds": [{"score": 0.8, "box": far, "class": "Car"}],
+                "gts": [{"box": box, "class": "Car", "difficulty": 0}]}
+        res = kitti_eval.evaluate(
+            [img1, img2], ["Car", "Pedestrian"],
+            {"Car": [0.7, 0.5], "Pedestrian": [0.5]}, ["3d", "bev"])
+        self.assertEqual(set(res), {"Car", "Pedestrian"})
+        self.assertEqual(set(res["Car"]), {"3d", "bev"})
+        self.assertEqual(set(res["Car"]["3d"]), {0.7, 0.5})
+        self.assertEqual(set(res["Car"]["bev"][0.7]), {"easy", "moderate", "hard"})
+        # 1 of 2 GT found at precision 1 -> 20/40 targets -> 0.5
+        self.assertAlmostEqual(res["Car"]["3d"][0.7]["easy"], 0.5)
+        self.assertAlmostEqual(res["Car"]["bev"][0.5]["hard"], 0.5)
+        import math
+        self.assertTrue(math.isnan(res["Pedestrian"]["3d"][0.5]["easy"]))
+
+
 if __name__ == "__main__":
     unittest.main()
