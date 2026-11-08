@@ -42,6 +42,8 @@ def _labels(path: Path, width: int, height: int) -> list[dict]:
         labels.append(
             {
                 "class_name": fields[0],
+                "truncation": float(fields[1]),
+                "occlusion": int(float(fields[2])),
                 "bbox": [left, top, right - left, bottom - top],
                 "dimensions": [float(value) for value in fields[8:11]],
                 "location": [float(value) for value in fields[11:14]],

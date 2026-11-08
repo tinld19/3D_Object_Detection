@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from prepare_dataset import convert_dataset
+from prepare_dataset import _labels, convert_dataset
 import monocular_3d
 from monocular_3d import encode_yaw
 
@@ -85,6 +85,21 @@ class ConvertDatasetTest(unittest.TestCase):
             self.assertEqual((3, 384, 384), tuple(sample["image"].shape))
             self.assertTrue((target != 80).any())
             self.assertEqual((2, 8), tuple(dataset.raw_targets([0]).shape))
+
+    def test_labels_keep_truncation_and_occlusion(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            label_path = Path(temporary_directory) / "000000.txt"
+            label_path.write_text(
+                "Car 0.15 1 1.58 539.13 182.36 566.23 206.67 1.41 1.59 4.47 -3.59 2.02 45.01 1.50\n",
+                encoding="utf-8",
+            )
+
+            labels = _labels(label_path, 1242, 375)
+
+            self.assertEqual(1, len(labels))
+            self.assertEqual("Car", labels[0]["class_name"])
+            self.assertEqual(0.15, labels[0]["truncation"])
+            self.assertEqual(1, labels[0]["occlusion"])
 
 
 if __name__ == "__main__":
