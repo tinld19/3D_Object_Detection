@@ -33,7 +33,12 @@ class ConvertDatasetTest(unittest.TestCase):
             )
             (calib_dir / "000000.txt").write_text("P2: 1 0 0 0\n", encoding="utf-8")
 
-            convert_dataset(image_dir, label_dir, calib_dir, output_dir, val_fraction=0, seed=7)
+            split_dir = root / "splits"
+            split_dir.mkdir()
+            (split_dir / "train.txt").write_text("000000\n", encoding="utf-8")
+            (split_dir / "val.txt").write_text("", encoding="utf-8")
+
+            convert_dataset(image_dir, label_dir, calib_dir, output_dir, split_dir)
 
             annotations = json.loads((output_dir / "train" / "_annotations.coco.json").read_text())
             self.assertEqual([{"id": 1, "name": "Car", "supercategory": "Car"}], annotations["categories"])
@@ -44,6 +49,30 @@ class ConvertDatasetTest(unittest.TestCase):
             self.assertEqual([2.0, 1.0, 15.0], annotation["location"])
             self.assertEqual(0.5, annotation["rotation_y"])
             self.assertEqual([1.0, 0.0, 0.0, 0.0], annotations["images"][0]["calibration"]["P2"])
+
+    def test_convert_splits_by_imagesets(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            image_dir, label_dir, calib_dir = root / "images", root / "labels", root / "calib"
+            split_dir, output_dir = root / "splits", root / "dataset"
+            for directory in (image_dir, label_dir, calib_dir, split_dir):
+                directory.mkdir()
+            png = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">IIBBBBB", 1242, 375, 8, 2, 0, 0, 0)
+            for stem in ("000000", "000001", "000002"):
+                (image_dir / f"{stem}.png").write_bytes(png)
+                (label_dir / f"{stem}.txt").write_text("Car 0 0 0 10 20 110 220 1.5 1.6 4.0 2.0 1.0 15.0 0.5\n", encoding="utf-8")
+                (calib_dir / f"{stem}.txt").write_text("P2: 1 0 0 0\n", encoding="utf-8")
+            (split_dir / "train.txt").write_text("000000\n000002\n", encoding="utf-8")
+            (split_dir / "val.txt").write_text("000001\n", encoding="utf-8")
+
+            convert_dataset(image_dir, label_dir, calib_dir, output_dir, split_dir)
+
+            def names(split):
+                data = json.loads((output_dir / split / "_annotations.coco.json").read_text())
+                return sorted(Path(image["file_name"]).stem for image in data["images"])
+
+            self.assertEqual(["000000", "000002"], names("train"))
+            self.assertEqual(["000001"], names("valid"))
 
     def test_foreground_depth_target_uses_nearer_overlap_and_background(self):
         self.assertTrue(hasattr(monocular_3d, "foreground_depth_targets"))
