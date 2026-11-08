@@ -1,9 +1,9 @@
 """Train the frozen RF-DETR DINO + foreground-depth KITTI 3D stage."""
 
 import argparse
-import random
 from pathlib import Path
 
+from prepare_dataset import _read_split
 from monocular_3d import (
     ForegroundDepth3DRegressor,
     KittiForegroundDepthDataset,
@@ -24,6 +24,13 @@ def _one(batch):
     return batch[0]
 
 
+def split_indices(stems: list[str], val_ids: set[str]) -> tuple[list[int], list[int]]:
+    """Return (train, valid) indices into stems; stems in val_ids are validation."""
+    train = [i for i, stem in enumerate(stems) if stem not in val_ids]
+    valid = [i for i, stem in enumerate(stems) if stem in val_ids]
+    return train, valid
+
+
 def set_seed(seed: int) -> None:
     import torch
 
@@ -35,6 +42,7 @@ def main() -> None:
     parser.add_argument("--image-dir", type=Path, default=Path("data/data_object_image_2/training/image_2"))
     parser.add_argument("--label-dir", type=Path, default=Path("data/training/label_2"))
     parser.add_argument("--calib-dir", type=Path, default=Path("data/data_object_calib/training/calib"))
+    parser.add_argument("--split-dir", type=Path, default=Path("kitti_imagesets"))
     parser.add_argument("--rfdetr-checkpoint", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=Path("runs/monocular-3d/best.pt"))
     parser.add_argument("--epochs", type=int, default=30)
@@ -57,10 +65,11 @@ def main() -> None:
     dataset = KittiForegroundDepthDataset(args.image_dir, args.label_dir, args.calib_dir)
     if len(dataset) < 2:
         raise SystemExit("At least two labelled KITTI frames are required for the train/validation split.")
-    indices = list(range(len(dataset)))
-    random.Random(args.seed).shuffle(indices)
-    valid_count = max(1, round(len(indices) * 0.1))
-    train_indices, valid_indices = indices[valid_count:], indices[:valid_count]
+    stems = [sample["image"].stem for sample in dataset.samples]
+    val_ids = set(_read_split(args.split_dir / "val.txt"))
+    train_indices, valid_indices = split_indices(stems, val_ids)
+    if not train_indices or not valid_indices:
+        raise SystemExit("ImageSets split leaves an empty train or validation set.")
     targets = dataset.raw_targets(train_indices)
     dataset.set_target_normalizer(targets.mean(0), targets.std(0, correction=0))
     train_loader = DataLoader(Subset(dataset, train_indices), batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, collate_fn=_one)
