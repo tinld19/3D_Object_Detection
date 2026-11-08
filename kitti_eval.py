@@ -31,6 +31,17 @@ def _inter_area(a, b):
         return 0.0
 
 
+def object_difficulty(bbox_height_px, occlusion, truncation):
+    """KITTI difficulty: 0 easy, 1 moderate, 2 hard, None if ignored (below Hard)."""
+    if bbox_height_px >= 40 and occlusion <= 0 and truncation <= 0.15:
+        return 0
+    if bbox_height_px >= 25 and occlusion <= 1 and truncation <= 0.30:
+        return 1
+    if bbox_height_px >= 25 and occlusion <= 2 and truncation <= 0.50:
+        return 2
+    return None
+
+
 def bev_iou(a, b):
     """BEV IoU of boxes (x, z, l, w, ry)."""
     try:
