@@ -42,6 +42,8 @@ python train_3d.py --rfdetr-checkpoint runs/rfdetr-kitti/checkpoint_best_total.p
 
 The RF-DETR checkpoint is required and is loaded only as a frozen feature extractor. Foreground depth uses 80 LID bins over 2–60 m plus a background bin; no full-scene pretrained depth estimator is used. The resulting `runs/monocular-3d/best.pt` stores the 3D head weights, class names, normalisation statistics, depth settings, and checkpoint path. It selects CUDA, then MPS, then CPU unless `--device` is specified. No 3D training is run automatically.
 
+For feature ablations, pass `--feature-mode rgb` to use only DINO RGB RoI features, `--feature-mode depth` to use only learned foreground-depth features, or leave the default `fusion` for the main model. RGB-only does not train the depth branch or depth cross-entropy; depth-only and fusion do. The `depth` mode is foreground-depth-feature-only: its learned depth feature is still generated from the frozen DINO RGB map, not an external depth sensor.
+
 ## Visualize 3D inference
 
 Use a raw KITTI image and its matching calibration file. The script gets 2D proposals from RF-DETR, runs the trained 3D head, and projects each predicted 3D cuboid on the original image.

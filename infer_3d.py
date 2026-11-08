@@ -92,7 +92,7 @@ def main() -> None:
         )
     classes = state["classes"]
     class_ids = {name: index for index, name in enumerate(classes)}
-    three_d = ForegroundDepth3DRegressor(len(classes)).to(selected_device)
+    three_d = ForegroundDepth3DRegressor(len(classes), feature_mode=state.get("feature_mode", "fusion")).to(selected_device)
     three_d.load_state_dict(state["state_dict"])
     three_d.eval()
     mean, std = torch.as_tensor(state["target_mean"], device=selected_device), torch.as_tensor(state["target_std"], device=selected_device)

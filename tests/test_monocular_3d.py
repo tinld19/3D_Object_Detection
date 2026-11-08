@@ -36,6 +36,31 @@ class ForegroundDepthModelTest(unittest.TestCase):
 
         self.assertIsNotNone(model.depth_predictor[0].weight.grad)
 
+    def test_rgb_mode_skips_depth_branch_but_keeps_one_prediction_per_object(self):
+        model = monocular_3d.ForegroundDepth3DRegressor(num_classes=3, feature_mode="rgb")
+        features = torch.randn(1, 256, 8, 12)
+        boxes = [torch.tensor([[0.1, 0.1, 0.4, 0.4], [0.5, 0.5, 0.25, 0.25]])]
+        class_ids = [torch.tensor([0, 1])]
+        geometry = [torch.zeros(2, 8)]
+
+        predictions, depth_logits = model(features, boxes, class_ids, geometry)
+
+        self.assertEqual((2, 8), tuple(predictions[0].shape))
+        self.assertIsNone(depth_logits)
+        self.assertIsNone(model.depth_predictor)
+
+    def test_depth_mode_uses_depth_branch_without_rgb_roi_feature(self):
+        model = monocular_3d.ForegroundDepth3DRegressor(num_classes=3, feature_mode="depth")
+        features = torch.randn(1, 256, 8, 12)
+        boxes = [torch.tensor([[0.1, 0.1, 0.4, 0.4]])]
+        class_ids = [torch.tensor([0])]
+        geometry = [torch.zeros(1, 8)]
+
+        predictions, depth_logits = model(features, boxes, class_ids, geometry)
+
+        self.assertEqual((1, 8), tuple(predictions[0].shape))
+        self.assertEqual((1, 81, 8, 12), tuple(depth_logits.shape))
+
 
 class RFDETRDinoAdapterTest(unittest.TestCase):
     def test_adapter_uses_spatial_backbone_feature(self):

@@ -82,16 +82,22 @@ if nn is not None:
     class ForegroundDepth3DRegressor(nn.Module):
         """Fuse frozen DINO features with learned foreground-depth features."""
 
-        def __init__(self, num_classes: int, feature_channels: int = 256, depth_bins: int = 80) -> None:
+        def __init__(self, num_classes: int, feature_channels: int = 256, depth_bins: int = 80, feature_mode: str = "fusion") -> None:
             super().__init__()
-            self.depth_predictor = nn.Sequential(
-                nn.Conv2d(feature_channels, feature_channels, 3, padding=1), nn.ReLU(),
-                nn.Conv2d(feature_channels, feature_channels, 3, padding=1), nn.ReLU(),
-            )
-            self.depth_logits = nn.Conv2d(feature_channels, depth_bins + 1, 1)
+            if feature_mode not in {"fusion", "rgb", "depth"}:
+                raise ValueError("feature_mode must be fusion, rgb, or depth.")
+            self.feature_mode = feature_mode
+            self.depth_predictor = None
+            self.depth_logits = None
+            if feature_mode != "rgb":
+                self.depth_predictor = nn.Sequential(
+                    nn.Conv2d(feature_channels, feature_channels, 3, padding=1), nn.ReLU(),
+                    nn.Conv2d(feature_channels, feature_channels, 3, padding=1), nn.ReLU(),
+                )
+                self.depth_logits = nn.Conv2d(feature_channels, depth_bins + 1, 1)
             self.class_embedding = nn.Embedding(num_classes, 8)
             self.head = nn.Sequential(
-                nn.Linear(feature_channels * 2 + 16, 256), nn.ReLU(), nn.Linear(256, 8),
+                nn.Linear(feature_channels * (2 if feature_mode == "fusion" else 1) + 16, 256), nn.ReLU(), nn.Linear(256, 8),
             )
 
         @staticmethod
@@ -104,14 +110,17 @@ if nn is not None:
             return torch.nn.functional.adaptive_avg_pool2d(feature[:, top:bottom, left:right], 1).flatten()
 
         def forward(self, rgb_features, boxes, class_ids, geometry):
-            depth_features = self.depth_predictor(rgb_features)
-            depth_logits = self.depth_logits(depth_features)
+            depth_features = self.depth_predictor(rgb_features) if self.depth_predictor else None
+            depth_logits = self.depth_logits(depth_features) if self.depth_logits else None
             predictions = []
             for index, object_boxes in enumerate(boxes):
-                rgb_pooled = torch.stack([self._pool(rgb_features[index], box) for box in object_boxes])
-                depth_pooled = torch.stack([self._pool(depth_features[index], box) for box in object_boxes])
+                pooled = []
+                if self.feature_mode != "depth":
+                    pooled.append(torch.stack([self._pool(rgb_features[index], box) for box in object_boxes]))
+                if self.feature_mode != "rgb":
+                    pooled.append(torch.stack([self._pool(depth_features[index], box) for box in object_boxes]))
                 semantic = self.class_embedding(class_ids[index].to(rgb_features.device))
-                predictions.append(self.head(torch.cat((rgb_pooled, depth_pooled, semantic, geometry[index].to(rgb_features.device)), dim=1)))
+                predictions.append(self.head(torch.cat((*pooled, semantic, geometry[index].to(rgb_features.device)), dim=1)))
             return predictions, depth_logits
 
 
