@@ -1,10 +1,11 @@
 import json
+import re
 import struct
 import tempfile
 import unittest
 from pathlib import Path
 
-from prepare_dataset import _labels, convert_dataset
+from prepare_dataset import _labels, _read_split, convert_dataset
 import monocular_3d
 from monocular_3d import encode_yaw
 
@@ -100,6 +101,28 @@ class ConvertDatasetTest(unittest.TestCase):
             self.assertEqual("Car", labels[0]["class_name"])
             self.assertEqual(0.15, labels[0]["truncation"])
             self.assertEqual(1, labels[0]["occlusion"])
+
+
+class ReadSplitTest(unittest.TestCase):
+    def test_read_split_parses_ids(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "split.txt"
+            path.write_text("000000\n000003\n\n000003\n000007")
+            self.assertEqual(["000000", "000003", "000007"], _read_split(path))
+
+    def test_read_split_missing_file_raises(self):
+        with self.assertRaises(FileNotFoundError):
+            _read_split(Path("does-not-exist.txt"))
+
+    def test_committed_chen_split_partitions_7481(self):
+        root = Path(__file__).resolve().parent.parent / "kitti_imagesets"
+        train = _read_split(root / "train.txt")
+        val = _read_split(root / "val.txt")
+        self.assertEqual(3712, len(train))
+        self.assertEqual(3769, len(val))
+        self.assertTrue(set(train).isdisjoint(val))
+        self.assertEqual(7481, len(set(train) | set(val)))
+        self.assertTrue(all(re.fullmatch(r"\d{6}", i) for i in train + val))
 
 
 if __name__ == "__main__":

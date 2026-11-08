@@ -11,6 +11,12 @@ from pathlib import Path
 IGNORED_CLASSES = {"DontCare"}
 
 
+def _read_split(path: Path) -> list[str]:
+    """Read an ImageSets file into ordered, de-duplicated image-id stems."""
+    ids = (line.strip() for line in path.read_text().splitlines())
+    return list(dict.fromkeys(i for i in ids if i))
+
+
 def _image_size(path: Path) -> tuple[int, int]:
     with path.open("rb") as image:
         if image.read(8) != b"\x89PNG\r\n\x1a\n" or image.read(4) != b"\x00\x00\x00\r" or image.read(4) != b"IHDR":
