@@ -40,6 +40,7 @@ def _labels(path: Path, width: int, height: int) -> list[dict]:
         if len(fields) != 15 or fields[0] in IGNORED_CLASSES:
             continue
         left, top, right, bottom = map(float, fields[4:8])
+        raw_height = float(fields[7]) - float(fields[5])
         left, right = max(0.0, left), min(float(width), right)
         top, bottom = max(0.0, top), min(float(height), bottom)
         if right <= left or bottom <= top:
@@ -50,6 +51,7 @@ def _labels(path: Path, width: int, height: int) -> list[dict]:
                 "truncation": float(fields[1]),
                 "occlusion": int(float(fields[2])),
                 "bbox": [left, top, right - left, bottom - top],
+                "bbox_height_raw": raw_height,
                 "dimensions": [float(value) for value in fields[8:11]],
                 "location": [float(value) for value in fields[11:14]],
                 "rotation_y": float(fields[14]),

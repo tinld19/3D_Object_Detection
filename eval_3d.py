@@ -14,6 +14,12 @@ NOTE = "held-out Chen val split, not the KITTI test server"
 SPLIT_NAME = "Chen val"
 
 
+LIMITATIONS = [
+    "DontCare regions are not suppressed via 2D-IoU overlap; low-score detections in DontCare regions count as false positives (conservatively lowers AP).",
+    "Matching is single-pass score-greedy, not the devkit's per-threshold overlap-greedy matching (usually <0.5 AP difference).",
+]
+
+
 def assemble_gt(label_path, width, height):
     """Ground truths for one frame; label-free or DontCare-only frames give []."""
     gts = []
@@ -24,7 +30,7 @@ def assemble_gt(label_path, width, height):
             "box": (h, w, l, x, y, z, label["rotation_y"]),
             "class": label["class_name"],
             "difficulty": kitti_eval.object_difficulty(
-                label["bbox"][3], label["occlusion"], label["truncation"]),
+                label["bbox_height_raw"], label["occlusion"], label["truncation"]),
         })
     return gts
 
@@ -120,6 +126,7 @@ def evaluate_checkpoint(args):
         "split": SPLIT_NAME,
         "num_images": len(images),
         "note": NOTE,
+        "limitations": LIMITATIONS,
         "result": result,
     }, indent=2))
     print(f"Saved {output}")

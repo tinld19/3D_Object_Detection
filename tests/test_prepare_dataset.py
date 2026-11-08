@@ -131,6 +131,19 @@ class ConvertDatasetTest(unittest.TestCase):
             self.assertEqual(0.15, labels[0]["truncation"])
             self.assertEqual(1, labels[0]["occlusion"])
 
+    def test_labels_keep_raw_bbox_height(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            label_path = Path(temporary_directory) / "000000.txt"
+            label_path.write_text(
+                "Car 0.50 0 1.58 539.13 -20.0 566.23 30.0 1.41 1.59 4.47 -3.59 2.02 45.01 1.50\n",
+                encoding="utf-8",
+            )
+
+            labels = _labels(label_path, 1242, 375)
+
+            self.assertAlmostEqual(50.0, labels[0]["bbox_height_raw"])
+            self.assertAlmostEqual(30.0, labels[0]["bbox"][3])
+
 
 class ReadSplitTest(unittest.TestCase):
     def test_read_split_parses_ids(self):

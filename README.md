@@ -77,6 +77,13 @@ This prints the tables and writes `runs/monocular-3d/eval-<feature_mode>.json` (
 python eval_3d.py --compare runs/monocular-3d/eval-rgb.json runs/monocular-3d/eval-depth.json runs/monocular-3d/eval-fusion.json
 ```
 
+### Known limitations (comparability to published KITTI/MonoDETR AP)
+
+- DontCare regions are not suppressed via 2D-IoU overlap: low-score detections falling in KITTI DontCare regions are counted as false positives, which conservatively lowers AP.
+- Matching is single-pass score-greedy, not the devkit's per-threshold overlap-greedy matching. This is a close approximation (usually under 0.5 AP difference).
+
+AP|R40 here is computed on the held-out Chen val split and may differ slightly from the official eval until these are addressed.
+
 ## Verify conversion
 
 ```bash

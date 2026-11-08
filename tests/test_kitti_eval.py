@@ -147,8 +147,6 @@ class TestEvaluate(unittest.TestCase):
         self.assertTrue(math.isnan(res["Pedestrian"]["3d"][0.5]["easy"]))
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class TestFormatting(unittest.TestCase):
@@ -171,3 +169,7 @@ class TestFormatting(unittest.TestCase):
         self.assertTrue(any(l.startswith("| rgb") for l in lines))
         self.assertTrue(any(l.startswith("| fusion") for l in lines))
         self.assertIn("---", text)
+
+
+if __name__ == "__main__":
+    unittest.main()
