@@ -84,6 +84,29 @@ class TestMatchImage(unittest.TestCase):
         self.assertEqual(flags, [])
         self.assertEqual(n, 0)
 
+    NEAR = (0.2, 10.0, 4.0, 2.0, 0.0)  # IoU ~0.82 with HIT
+
+    def test_valid_gt_preferred_over_higher_iou_neighbour(self):
+        gts = [{"box": self.NEAR, "class": "Car", "difficulty": 0},
+               {"box": self.HIT, "class": "Van", "difficulty": 0}]
+        flags, n = self._match([{"score": 0.9, "box": self.HIT}], gts)
+        self.assertEqual(flags, [(0.9, True)])
+        self.assertEqual(n, 1)
+
+    def test_neighbour_gt_not_consumed(self):
+        gts = [{"box": self.HIT, "class": "Van", "difficulty": 0}]
+        preds = [{"score": 0.9, "box": self.HIT}, {"score": 0.8, "box": self.HIT}]
+        flags, n = self._match(preds, gts)
+        self.assertEqual(flags, [])
+        self.assertEqual(n, 0)
+
+    def test_valid_gt_preferred_over_higher_iou_ignored_car(self):
+        gts = [{"box": self.NEAR, "class": "Car", "difficulty": 0},
+               {"box": self.HIT, "class": "Car", "difficulty": None}]
+        flags, n = self._match([{"score": 0.9, "box": self.HIT}], gts)
+        self.assertEqual(flags, [(0.9, True)])
+        self.assertEqual(n, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

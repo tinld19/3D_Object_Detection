@@ -95,18 +95,21 @@ def match_image(preds, gts, iou_fn, iou_thr, difficulty, eval_class, neighbours)
     used = set()
     flags = []
     for pred in sorted(preds, key=lambda p: p["score"], reverse=True):
-        best, best_iou = None, iou_thr
+        best_valid, best_iou = None, iou_thr
+        ignored = False
         for i in candidates:
-            if i in used:
-                continue
             iou = iou_fn(pred["box"], gts[i]["box"])
-            if iou >= best_iou:
-                best, best_iou = i, iou
-        if best is None:
-            flags.append((pred["score"], False))
-            continue
-        used.add(best)
-        if is_valid(gts[best]):
+            if iou <= iou_thr:
+                continue
+            if is_valid(gts[i]):
+                if i not in used and iou > best_iou:
+                    best_valid, best_iou = i, iou
+            else:
+                ignored = True  # neighbour / ignored GT: never consumed
+        if best_valid is not None:
+            used.add(best_valid)
             flags.append((pred["score"], True))
-        # otherwise don't-care: pred removed
+        elif not ignored:
+            flags.append((pred["score"], False))
+        # else don't-care: pred removed
     return flags, num_valid_gt
