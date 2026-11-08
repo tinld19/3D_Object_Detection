@@ -149,3 +149,25 @@ class TestEvaluate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestFormatting(unittest.TestCase):
+    @staticmethod
+    def _result(ap):
+        cell = {"easy": ap, "moderate": float("nan"), "hard": ap / 2}
+        return {"Car": {"3d": {0.7: dict(cell)}, "bev": {0.7: dict(cell)}}}
+
+    def test_format_table_renders_both_blocks_and_nan(self):
+        text = kitti_eval.format_table(self._result(80.0), "fusion")
+        self.assertIn("3D AP", text)
+        self.assertIn("BEV AP", text)
+        self.assertIn("Car", text)
+        self.assertIn("nan", text.lower())
+
+    def test_format_comparison_builds_markdown(self):
+        text = kitti_eval.format_comparison(
+            {"rgb": self._result(50.0), "fusion": self._result(60.0)})
+        lines = text.splitlines()
+        self.assertTrue(any(l.startswith("| rgb") for l in lines))
+        self.assertTrue(any(l.startswith("| fusion") for l in lines))
+        self.assertIn("---", text)

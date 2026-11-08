@@ -60,6 +60,23 @@ python infer_3d.py \
 
 Only detector classes represented in the 3D checkpoint are rendered. A first-epoch `smoke.pt` is only a pipeline check; train the 3D stage longer before interpreting cuboid quality.
 
+## Evaluate 3D (KITTI AP)
+
+Computes KITTI AP40 (3D and BEV; Car at IoU 0.7/0.5, Pedestrian and Cyclist at 0.5; Easy/Moderate/Hard) for a trained 3D-stage checkpoint. Results are on the held-out Chen val split (`kitti_imagesets/val.txt`), not the KITTI test server.
+
+```bash
+python eval_3d.py \
+  --3d-checkpoint runs/monocular-3d/best.pt \
+  --rfdetr-checkpoint runs/rfdetr-kitti/checkpoint_best_ema.pth \
+  --device cuda
+```
+
+This prints the tables and writes `runs/monocular-3d/eval-<feature_mode>.json` (override with `--output`; use `--limit N` for a quick check). To build the ablation table from several runs:
+
+```bash
+python eval_3d.py --compare runs/monocular-3d/eval-rgb.json runs/monocular-3d/eval-depth.json runs/monocular-3d/eval-fusion.json
+```
+
 ## Verify conversion
 
 ```bash

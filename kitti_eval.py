@@ -182,3 +182,49 @@ def evaluate(images, classes, iou_thresholds, metrics):
                         n += ng
                     result[cls][metric][thr][name] = ap40(flags, n)
     return result
+
+
+_COLUMNS = (("easy", "Easy"), ("moderate", "Moderate"), ("hard", "Hard"))
+_METRIC_TITLES = (("3d", "3D AP"), ("bev", "BEV AP"))
+
+
+def _cell(value):
+    return "nan" if value is None or value != value else f"{value:.2f}"
+
+
+def format_table(result, feature_mode):
+    """Markdown tables: a 3D AP block then a BEV AP block (class x IoU rows)."""
+    blocks = []
+    for key, title in _METRIC_TITLES:
+        lines = [f"{title} ({feature_mode})", "",
+                 "| Class | IoU | Easy | Moderate | Hard |",
+                 "| --- | --- | --- | --- | --- |"]
+        for cls, metrics in result.items():
+            for thr, diffs in metrics.get(key, {}).items():
+                cells = " | ".join(_cell(diffs.get(n)) for n, _ in _COLUMNS)
+                lines.append(f"| {cls} | {float(thr):.2f} | {cells} |")
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks)
+
+
+def format_comparison(results):
+    """Markdown ablation table: one row per feature_mode."""
+    header = ["Feature mode"]
+    keys = []
+    for key, title in _METRIC_TITLES:
+        for cls, metrics in next(iter(results.values()), {}).items():
+            for thr in metrics.get(key, {}):
+                for name, label in _COLUMNS:
+                    header.append(f"{title} {cls}@{float(thr):.2f} {label}")
+                    keys.append((cls, key, thr, name))
+    lines = ["| " + " | ".join(header) + " |",
+             "| " + " | ".join(["---"] * len(header)) + " |"]
+    for mode, result in results.items():
+        cells = []
+        for cls, key, thr, name in keys:
+            try:
+                cells.append(_cell(result[cls][key][thr][name]))
+            except KeyError:
+                cells.append("nan")
+        lines.append("| " + " | ".join([mode] + cells) + " |")
+    return "\n".join(lines)
