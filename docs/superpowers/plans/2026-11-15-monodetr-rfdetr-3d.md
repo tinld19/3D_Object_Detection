@@ -69,7 +69,7 @@
 **Interfaces:**
 - Consumes: Task 1 helpers; `_labels`, `_image_size`, `_calibration`, `_read_split` from `prepare_dataset`; `foreground_depth_targets`, `depth_bin` from `monocular_3d`.
 - Produces:
-  - `class Mono3DDetrDataset(Dataset)` with `classes`, `class_ids`, per-class `mean_dims` (computed over the split), `__getitem__` returning a dict: `image` (CxHxW float), `p2` (rescaled 12), `orig_size`, `targets` = dict of tensors keyed `labels[g], boxes2d[g,4] (cx,cy,w,h normalized), center3d[g,2] (normalized pixel), depth[g], dims[g,3], alpha[g], orient_bin[g], orient_res[g]`, `depth_map_target[h,w]`, `depth_map_mask[h,w]`, and `flip` flag applied.
+  - `class Mono3DDetrDataset(Dataset)` — `__init__(..., feature_size: tuple[int,int], image_size=384, flip_prob=0.0)`. `feature_size` is the `(h,w)` of the model's feature map (the size `depth_map_target` is painted at — must match `DepthPredictor` output / `F0`; the training entry discovers it from one RF-DETR forward and passes it, tests use a small fixed size). Exposes `classes`, `class_ids`, **per-class `mean_dims` (computed over the split — the single source of mean dims; Task 9 reads this, does not recompute)**. `__getitem__` returns a dict: `image` (CxHxW float), `p2` (rescaled 12), `orig_size`, `targets` = dict of tensors keyed `labels[g], boxes2d[g,4] (cx,cy,w,h normalized), center3d[g,2] (normalized pixel), depth[g], dims[g,3], alpha[g], orient_bin[g], orient_res[g]`, `depth_map_target[h,w]`, `depth_map_mask[h,w]`, and `flip` flag applied.
   - `collate_mono3d(batch) -> dict` — stacks images/p2; targets kept as a list of per-image dicts (variable `g`); depth maps padded/stacked.
   - `horizontal_flip(sample)` applied with probability `--flip-prob` in train mode (mirrors `boxes2d`, `center3d`, `alpha`/`ry`, and P2 principal point).
   - `class ProposalCache` — `get(stem) -> proposals | None`, `put(stem, proposals)`; proposals = dict `boxes2d[P,4], scores[P], classes[P]`; backed by `.npz` files under a cache dir. Feature cache (`F0`) same shape of API, optional.
@@ -215,11 +215,11 @@
 **Interfaces:**
 - Consumes: Tasks 2,3,7,8; `device`/`set_seed` from `train_3d`; Chen split via `_read_split`.
 - Produces:
-  - `build_mean_dims(dataset) -> dict` and `split_indices` reuse (from `train_3d`).
+  - Reads `dataset.mean_dims` (single source from Task 2 — does **not** recompute) and reuses `split_indices` from `train_3d`. Discovers the feature-map `(h,w)` from one RF-DETR/encoder forward on a sample and passes it to the dataset's `feature_size`.
   - `main()` with args `--rfdetr-checkpoint` (required), `--image-dir/--label-dir/--calib-dir`, `--split-dir` (default `kitti_imagesets`), `--feature-mode {fusion,rgb,depth}`, `--freeze-rfdetr` (always true; flag documents it), `--epochs`, `--batch-size 8`, `--grad-accum`, `--amp`, `--lr`, `--flip-prob`, `--cache-dir`, `--seed`, `--device`, `--output runs/mono3d-detr/<mode>.pt`.
   - `save_checkpoint(path, model, meta)` — writes `arch="b"`, `classes`, `mean_dims`, `feature_mode`, `target` norms.
 
-- [ ] **Step 1: Write failing tests:** arg parsing defaults (split-dir, batch-size 8, output path per mode); `save_checkpoint` writes a dict with `arch=="b"` and `mean_dims`; `build_mean_dims` on a synthetic dataset returns per-class means; a **one-step** train on a 1-image synthetic dataset + a stubbed proposal source + tiny `f0` runs `loss.backward()`+`optimizer.step()` without error (integration smoke, CPU, `--limit`-style).
+- [ ] **Step 1: Write failing tests:** arg parsing defaults (split-dir, batch-size 8, output path per mode); `save_checkpoint` writes a dict with `arch=="b"` and `mean_dims` (read from `dataset.mean_dims`); a **one-step** train on a 1-image synthetic dataset + a stubbed proposal source + tiny `f0` runs `loss.backward()`+`optimizer.step()` without error (integration smoke, CPU, `--limit`-style).
 - [ ] **Step 2: Run, verify fail.**
 - [ ] **Step 3: Implement** `train_mono3d_detr.py` (lazy-import torch/rfdetr inside `main`).
 - [ ] **Step 4: Run, verify pass.**
