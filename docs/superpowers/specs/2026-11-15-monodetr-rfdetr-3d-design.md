@@ -308,3 +308,32 @@ section.
    Proposals and `F0` are cacheable. (Reflected in "Feature extraction" above.)
 3. **Branch:** **merge `feat/kitti-3d-eval` into `main` first**, then build B
    on a fresh branch off `main`. The merge is the plan's setup task.
+
+## Post-implementation follow-ups (after the 10-task build + reviews)
+
+The branch was built, reviewed per task, and passed a final whole-branch
+review (clean after one fix wave; full unit suite 119/119). These items are
+NOT done and are tracked here durably:
+
+1. **First-server-run gate — real RF-DETR contract (highest risk).** The whole
+   train→eval path has only ever run on synthetic stubs locally (no GPU/RF-DETR
+   checkpoint). `RFDETRProposalSource.forward` calls `predict` with a
+   `Tensor[3,H,W]` in [0,1] and reads `supervision.Detections` fields
+   (`xyxy`/`confidence`/`class_id`). If the installed `RFDETRNano.predict`
+   expects PIL/uint8-HWC or a different return shape, both training and eval
+   proposal generation will need a thin adapter. Verify this FIRST on the
+   server with `--limit 50` before any full run.
+2. **Caching fast-follow (perf, not correctness).** `ProposalCache` and
+   `--cache-dir` exist but are not wired into the training loop (stems are not
+   threaded through `collate`/`train_epoch`/`_step`), so each step re-runs the
+   frozen DINOv2 + RF-DETR backbone. Results are unaffected; wiring it (cache
+   `f0` + proposals to disk per image stem) is a large speed-up on the RTX 4090
+   and should be done before long runs, or `--cache-dir` removed if not.
+3. **Sanity gates before trusting 3D AP** (already in the plan): RF-DETR
+   proposal 2D recall on val, and depth-map foreground MAE.
+4. **Honest minors deferred:** decoder `ref_points` not detached between layers;
+   `--freeze-rfdetr` is a no-op flag; some tests print to stdout (not pristine).
+
+Reminder for the thesis table: B's AP is comparable to MonoDETR on the metric
+axis (Chen val, AP40, rotated IoU) but the setup differs — disclose DINOv2
+frozen + RF-DETR pretrained + proposal-guided queries.
