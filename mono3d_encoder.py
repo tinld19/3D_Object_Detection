@@ -1,5 +1,4 @@
 """Frozen RF-DETR proposal source and trainable feature encoder for Mono3D DETR."""
-import math
 
 import torch
 from torch import nn
