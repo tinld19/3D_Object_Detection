@@ -18,6 +18,10 @@ LIMITATIONS = [
     "DontCare regions are not suppressed via 2D-IoU overlap; low-score detections in DontCare regions count as false positives (conservatively lowers AP).",
     "Matching is single-pass score-greedy, not the devkit's per-threshold overlap-greedy matching (usually <0.5 AP difference).",
 ]
+LIMITATIONS_B = [
+    "Arch b uses a frozen DINOv2 backbone (RF-DETR) and frozen RF-DETR 2D proposals to seed proposal-guided queries; proposal recall bounds the 3D AP.",
+    "Arch b is evaluated on the held-out Chen val split, not the KITTI test server.",
+]
 
 
 def assemble_gt(label_path, width, height):
@@ -47,23 +51,78 @@ def compare(paths):
     results = {}
     for path in paths:
         data = json.loads(Path(path).read_text())
-        results[data["feature_mode"]] = {
+        results[f'{data.get("arch", "a")}/{data["feature_mode"]}'] = {
             cls: {m: {float(t): d for t, d in thr.items()} for m, thr in metrics.items()}
             for cls, metrics in data["result"].items()}
     print(kitti_eval.format_comparison(results))
 
 
-def evaluate_checkpoint(args):
-    try:
-        import torch
-        from PIL import Image
-        from rfdetr import RFDETRNano
-    except ImportError as error:
-        raise SystemExit("Install dependencies first: pip install -r requirements.txt") from error
+def _make_b_fns(args, dev):
+    """Real frozen feature adapter and RF-DETR proposal source (replaceable in tests)."""
+    from mono3d_encoder import RFDETRProposalSource
+    from monocular_3d import RFDETRDinoAdapter
+
+    adapter = RFDETRDinoAdapter(args.rfdetr_checkpoint).to(dev).eval()
+    source = RFDETRProposalSource(args.rfdetr_checkpoint)
+    return adapter, source
+
+
+def decode_arch_b(model, feature_fn, proposal_fn, pixels, p2, classes, image_size, score_thr, mode):
+    """One image through arch-b; returns metric preds with class NAME strings."""
+    import torch
+
+    with torch.no_grad():
+        f0 = feature_fn(pixels)
+        proposals = proposal_fn(pixels)
+        per_image = model.predict(f0, proposals, [p2], image_size=image_size,
+                                  score_thr=score_thr, mode=mode)
+    return [{"score": float(d["score"]), "class": classes[int(d["class"])], "box": tuple(d["box"])}
+            for d in per_image[0]]
+
+
+def _images_b(args, state, dev):
+    import torch
+    from PIL import Image
+    from mono3d_model import MonoDetr3D
+    from mono3d_targets import rescale_p2
+
+    classes = state["classes"]
+    feature_mode = state["feature_mode"]
+    size = int(state.get("image_size", 384))
+    model = MonoDetr3D(len(classes), state["mean_dims"], feature_mode=feature_mode,
+                       num_queries=state.get("num_queries", 50),
+                       decoder_layers=state.get("decoder_layers", 3)).to(dev)
+    model.load_state_dict(state["state_dict"])
+    model.eval()
+    feature_fn, proposal_fn = _make_b_fns(args, dev)
+    stems = _read_split(args.split_dir / "val.txt")
+    if args.limit:
+        stems = stems[:args.limit]
+    images = []
+    for stem in stems:
+        p2 = _calibration(args.calib_dir / f"{stem}.txt").get("P2")
+        if len(p2 or []) != 12:
+            raise SystemExit(f"Calibration has no 12-value P2 matrix: {stem}")
+        with Image.open(args.image_dir / f"{stem}.png") as source:
+            image = source.convert("RGB")
+        width, height = image.size
+        gts = assemble_gt(args.label_dir / f"{stem}.txt", width, height)
+        resized = image.resize((size, size))
+        pixels = torch.tensor(bytearray(resized.tobytes()), dtype=torch.float32).view(size, size, 3)
+        pixels = pixels.permute(2, 0, 1).div_(255).unsqueeze(0).to(dev)
+        p2_in = rescale_p2(p2, (width, height), (size, size))
+        preds = decode_arch_b(model, feature_fn, proposal_fn, pixels, p2_in, classes,
+                              (size, size), args.score_thr, feature_mode)
+        images.append({"preds": preds, "gts": gts})
+    return images
+
+
+def _images_a(args, state, dev):
+    import torch
+    from PIL import Image
+    from rfdetr import RFDETRNano
     from monocular_3d import ForegroundDepth3DRegressor, RFDETRDinoAdapter
 
-    dev = args.device or _device()
-    state = torch.load(args.three_d_checkpoint, map_location=dev)
     classes = state["classes"]
     class_ids = {name: i for i, name in enumerate(classes)}
     feature_mode = state.get("feature_mode", "fusion")
@@ -112,6 +171,32 @@ def evaluate_checkpoint(args):
                 preds.append({"score": score, "class": name,
                               "box": (h, w, l, x, y, z, math.atan2(sine, cosine))})
         images.append({"preds": preds, "gts": gts})
+    return images
+
+
+def evaluate_checkpoint(args):
+    try:
+        import torch
+    except ImportError as error:
+        raise SystemExit("Install dependencies first: pip install -r requirements.txt") from error
+
+    dev = args.device or _device()
+    state = torch.load(args.three_d_checkpoint, map_location=dev)
+    classes = state["classes"]
+    arch = state.get("arch", "a")
+    feature_mode = state.get("feature_mode", "fusion")
+    if arch == "b":
+        try:
+            images = _images_b(args, state, dev)
+        except ImportError as error:
+            raise SystemExit("Install dependencies first: pip install -r requirements.txt") from error
+        limitations = LIMITATIONS + LIMITATIONS_B
+    else:
+        try:
+            images = _images_a(args, state, dev)
+        except ImportError as error:
+            raise SystemExit("Install dependencies first: pip install -r requirements.txt") from error
+        limitations = LIMITATIONS
 
     eval_classes = [c for c in classes if c in EVAL_CLASSES]
     thresholds = {c: IOU_THRESHOLDS[c] for c in eval_classes}
@@ -122,11 +207,12 @@ def evaluate_checkpoint(args):
     output.write_text(json.dumps({
         "3d_checkpoint": str(args.three_d_checkpoint),
         "rfdetr_checkpoint": str(args.rfdetr_checkpoint),
+        "arch": arch,
         "feature_mode": feature_mode,
         "split": SPLIT_NAME,
         "num_images": len(images),
         "note": NOTE,
-        "limitations": LIMITATIONS,
+        "limitations": limitations,
         "result": result,
     }, indent=2))
     print(f"Saved {output}")
