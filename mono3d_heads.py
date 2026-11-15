@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from mono3d_depth import sample_depth_at
-from mono3d_targets import (backproject_center, geometric_depth, multibin_decode,
+from mono3d_targets import (backproject_center, multibin_decode,
                             ry_from_alpha)
 
 # Relative-error priors (std as a fraction of depth) for the non-regressed sources.

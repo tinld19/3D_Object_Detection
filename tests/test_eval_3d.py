@@ -105,6 +105,36 @@ class TestArchB(unittest.TestCase):
         self.assertEqual(len(seen["p2"][0]), 12)
         self.assertAlmostEqual(seen["p2"][0][0], 350.0)  # 700 * 32/64
 
+    def test_arch_b_trainer_checkpoint_with_dict_mean_dims_end_to_end(self):
+        import json
+        import torch
+        import train_mono3d_detr
+        from mono3d_model import MonoDetr3D
+
+        def fake_predict(self, f0, proposals, p2, image_size, score_thr=0.05, mode=None):
+            return [[{"score": 0.9, "class": 0, "box": (1.5, 1.6, 3.9, 1.0, 1.7, 20.0, 0.1)}]]
+
+        original = MonoDetr3D.predict
+        original_make = eval_3d._make_b_fns
+        MonoDetr3D.predict = fake_predict
+        eval_3d._make_b_fns = lambda args, dev: (
+            lambda x: torch.zeros(1, 256, 4, 4), lambda x: [{"boxes2d": torch.zeros(0, 4)}])
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                args = self._setup(tmp)
+                md = {"Car": [1.5, 1.6, 3.9], "Pedestrian": [1.7, 0.6, 0.8]}
+                model = MonoDetr3D(2, [md["Car"], md["Pedestrian"]], feature_mode="fusion",
+                                   num_queries=4, decoder_layers=1)
+                train_mono3d_detr.save_checkpoint(args.three_d_checkpoint, model, {
+                    "classes": ["Car", "Pedestrian"], "mean_dims": md, "feature_mode": "fusion",
+                    "image_size": 32, "num_queries": 4, "decoder_layers": 1})
+                eval_3d.evaluate_checkpoint(args)
+                data = json.loads(args.output.read_text())
+        finally:
+            MonoDetr3D.predict = original
+            eval_3d._make_b_fns = original_make
+        self.assertEqual(data["arch"], "b")
+
     def test_compare_keys_by_arch_and_mode(self):
         import json
         captured = {}

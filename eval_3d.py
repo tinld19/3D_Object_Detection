@@ -89,7 +89,9 @@ def _images_b(args, state, dev):
     classes = state["classes"]
     feature_mode = state["feature_mode"]
     size = int(state.get("image_size", 384))
-    model = MonoDetr3D(len(classes), state["mean_dims"], feature_mode=feature_mode,
+    md = state["mean_dims"]
+    md = [md[c] for c in classes] if isinstance(md, dict) else md
+    model = MonoDetr3D(len(classes), md, feature_mode=feature_mode,
                        num_queries=state.get("num_queries", 50),
                        decoder_layers=state.get("decoder_layers", 3)).to(dev)
     model.load_state_dict(state["state_dict"])

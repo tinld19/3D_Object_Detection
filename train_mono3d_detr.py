@@ -118,7 +118,7 @@ def run_training(args, feature_fn, proposal_fn):
     criterion = SetCriterion(len(dataset.classes))
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
     amp = args.amp and str(dev).startswith("cuda")
-    scaler = torch.cuda.amp.GradScaler() if amp else None
+    scaler = torch.amp.GradScaler("cuda") if amp else None
     train_loader = DataLoader(Subset(dataset, train_idx), batch_size=args.batch_size, shuffle=True,
                               collate_fn=collate_mono3d)
     valid_loader = DataLoader(Subset(dataset, valid_idx), batch_size=args.batch_size, collate_fn=collate_mono3d)
