@@ -21,7 +21,7 @@ def make_targets(gs, seed=0):
             "dims": torch.rand(g, 3, generator=g_) + 1.0,
             "alpha": torch.rand(g, generator=g_),
             "orient_bin": torch.randint(0, BINS, (g,), generator=g_),
-            "orient_res": torch.rand(g, BINS, generator=g_) * 0.2,
+            "orient_res": torch.rand(g, generator=g_) * 0.2,
         })
     return targets
 
@@ -52,7 +52,7 @@ def make_layer(targets, perfect=True, sigma=1.0, depth_err=0.0, seed=1):
             out["depth"][b, i] = t["depth"][i] + depth_err
             out["dims_all"][b, i, c] = t["dims"][i]
             out["orient_bin"][b, i, int(t["orient_bin"][i])] = 10.0
-            out["orient_res"][b, i] = t["orient_res"][i]
+            out["orient_res"][b, i, int(t["orient_bin"][i])] = t["orient_res"][i]
     return out
 
 

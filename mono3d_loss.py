@@ -139,7 +139,7 @@ class SetCriterion(nn.Module):
         gbin = cat(gt["bin"])
         ce = F.cross_entropy(cat(picks["ob"]), gbin, reduction="sum")
         pres = cat(picks["or_"]).gather(1, gbin[:, None]).squeeze(1)
-        gres = cat(gt["res"]).gather(1, gbin[:, None]).squeeze(1)
+        gres = cat(gt["res"])  # GT residual is already 1-D at the GT bin
         out["loss_orient"] = (ce + F.smooth_l1_loss(pres, gres, reduction="sum")) / num_gt
         return out
 
