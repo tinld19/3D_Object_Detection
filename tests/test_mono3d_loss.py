@@ -179,6 +179,16 @@ class CriterionTest(unittest.TestCase):
         self.assertEqual(float(losses["loss_depthmap"]), 0.0)
         self.assertTrue(torch.isfinite(losses["total"]))
 
+    def test_missing_depthmap_targets_raise_when_depth_active(self):
+        t = make_targets([2])
+        with self.assertRaises(ValueError):
+            SetCriterion(C)(wrap([make_layer(t)], B=1), t)
+
+    def test_rgb_mode_without_depthmap_targets_ok(self):
+        t = make_targets([2])
+        losses = SetCriterion(C)(wrap([make_layer(t)], with_depth=False), t)
+        self.assertEqual(float(losses["loss_depthmap"]), 0.0)
+
     def test_depthmap_explicit_kwargs(self):
         t = make_targets([2])
         tgt = torch.randint(0, 81, (1, FH, FW))

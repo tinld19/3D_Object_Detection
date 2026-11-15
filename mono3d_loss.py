@@ -155,7 +155,9 @@ class SetCriterion(nn.Module):
             dm_target = torch.stack([t["depth_map_target"] for t in targets])
             dm_mask = torch.stack([t["depth_map_mask"] for t in targets])
         if dm_target is None or dm_mask is None:
-            return like.new_zeros(())
+            raise ValueError(
+                "depth branch active but no depth_map_target/depth_map_mask provided; "
+                "pass them to SetCriterion.forward")
         dm_target, dm_mask = dm_target.to(logits.device), dm_mask.to(logits.device)
         ce = F.cross_entropy(logits, dm_target, reduction="none")
         n = dm_mask.sum().clamp(min=1)
