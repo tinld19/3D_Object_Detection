@@ -2,13 +2,18 @@
 
 import argparse
 import json
-import random
 import shutil
 import struct
 from pathlib import Path
 
 
 IGNORED_CLASSES = {"DontCare"}
+
+
+def _read_split(path: Path) -> list[str]:
+    """Read an ImageSets file into ordered, de-duplicated image-id stems."""
+    ids = (line.strip() for line in path.read_text().splitlines())
+    return list(dict.fromkeys(i for i in ids if i))
 
 
 def _image_size(path: Path) -> tuple[int, int]:
@@ -35,6 +40,7 @@ def _labels(path: Path, width: int, height: int) -> list[dict]:
         if len(fields) != 15 or fields[0] in IGNORED_CLASSES:
             continue
         left, top, right, bottom = map(float, fields[4:8])
+        raw_height = float(fields[7]) - float(fields[5])
         left, right = max(0.0, left), min(float(width), right)
         top, bottom = max(0.0, top), min(float(height), bottom)
         if right <= left or bottom <= top:
@@ -42,7 +48,10 @@ def _labels(path: Path, width: int, height: int) -> list[dict]:
         labels.append(
             {
                 "class_name": fields[0],
+                "truncation": float(fields[1]),
+                "occlusion": int(float(fields[2])),
                 "bbox": [left, top, right - left, bottom - top],
+                "bbox_height_raw": raw_height,
                 "dimensions": [float(value) for value in fields[8:11]],
                 "location": [float(value) for value in fields[11:14]],
                 "rotation_y": float(fields[14]),
@@ -90,20 +99,23 @@ def _write_split(records: list[dict], categories: list[dict], output_dir: Path) 
 
 
 def convert_dataset(
-    image_dir: Path, label_dir: Path, calib_dir: Path, output_dir: Path, val_fraction: float = 0.1, seed: int = 42
+    image_dir: Path, label_dir: Path, calib_dir: Path, output_dir: Path, split_dir: Path
 ) -> None:
-    """Create RF-DETR COCO `train` and `valid` splits from matching KITTI files."""
-    if not 0 <= val_fraction < 1:
-        raise ValueError("val_fraction must be in [0, 1)")
+    """Create RF-DETR COCO `train` and `valid` splits from KITTI files using ImageSets membership."""
+    train_stems = set(_read_split(split_dir / "train.txt"))
+    val_stems = set(_read_split(split_dir / "val.txt"))
     records = []
     for image_path in sorted(image_dir.glob("*.png")):
         stem = image_path.stem
+        if stem not in train_stems and stem not in val_stems:
+            continue
         label_path, calib_path = label_dir / f"{stem}.txt", calib_dir / f"{stem}.txt"
         if not label_path.exists() or not calib_path.exists():
             continue
         width, height = _image_size(image_path)
         records.append(
             {
+                "stem": stem,
                 "image_path": image_path,
                 "width": width,
                 "height": height,
@@ -115,10 +127,8 @@ def convert_dataset(
         raise FileNotFoundError("No matching KITTI image, label, and calibration files were found.")
     class_names = sorted({label["class_name"] for record in records for label in record["labels"]})
     categories = [{"id": index, "name": name, "supercategory": name} for index, name in enumerate(class_names, start=1)]
-    random.Random(seed).shuffle(records)
-    valid_count = round(len(records) * val_fraction)
-    _write_split(records[valid_count:], categories, output_dir / "train")
-    _write_split(records[:valid_count], categories, output_dir / "valid")
+    _write_split([r for r in records if r["stem"] in train_stems], categories, output_dir / "train")
+    _write_split([r for r in records if r["stem"] in val_stems], categories, output_dir / "valid")
 
 
 def main() -> None:
@@ -127,10 +137,9 @@ def main() -> None:
     parser.add_argument("--label-dir", type=Path, default=Path("data/training/label_2"))
     parser.add_argument("--calib-dir", type=Path, default=Path("data/data_object_calib/training/calib"))
     parser.add_argument("--output-dir", type=Path, default=Path("dataset"))
-    parser.add_argument("--val-fraction", type=float, default=0.1)
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--split-dir", type=Path, default=Path("kitti_imagesets"))
     args = parser.parse_args()
-    convert_dataset(args.image_dir, args.label_dir, args.calib_dir, args.output_dir, args.val_fraction, args.seed)
+    convert_dataset(args.image_dir, args.label_dir, args.calib_dir, args.output_dir, args.split_dir)
 
 
 if __name__ == "__main__":

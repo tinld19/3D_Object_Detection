@@ -60,6 +60,30 @@ python infer_3d.py \
 
 Only detector classes represented in the 3D checkpoint are rendered. A first-epoch `smoke.pt` is only a pipeline check; train the 3D stage longer before interpreting cuboid quality.
 
+## Evaluate 3D (KITTI AP)
+
+Computes KITTI AP40 (3D and BEV; Car at IoU 0.7/0.5, Pedestrian and Cyclist at 0.5; Easy/Moderate/Hard) for a trained 3D-stage checkpoint. Results are on the held-out Chen val split (`kitti_imagesets/val.txt`), not the KITTI test server.
+
+```bash
+python eval_3d.py \
+  --3d-checkpoint runs/monocular-3d/best.pt \
+  --rfdetr-checkpoint runs/rfdetr-kitti/checkpoint_best_ema.pth \
+  --device cuda
+```
+
+This prints the tables and writes `runs/monocular-3d/eval-<feature_mode>.json` (override with `--output`; use `--limit N` for a quick check). To build the ablation table from several runs:
+
+```bash
+python eval_3d.py --compare runs/monocular-3d/eval-rgb.json runs/monocular-3d/eval-depth.json runs/monocular-3d/eval-fusion.json
+```
+
+### Known limitations (comparability to published KITTI/MonoDETR AP)
+
+- DontCare regions are not suppressed via 2D-IoU overlap: low-score detections falling in KITTI DontCare regions are counted as false positives, which conservatively lowers AP.
+- Matching is single-pass score-greedy, not the devkit's per-threshold overlap-greedy matching. This is a close approximation (usually under 0.5 AP difference).
+
+AP|R40 here is computed on the held-out Chen val split and may differ slightly from the official eval until these are addressed.
+
 ## Verify conversion
 
 ```bash
