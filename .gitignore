@@ -3,7 +3,14 @@ data/
 .venv/
 __pycache__/
 dataset/
-runs/
 .DS_Store
 *.DS_Store
 .superpowers/
+# runs/*
+# !runs/**/
+# !runs/**/*.pt
+# !runs/**/*.pth
+# !runs/**/*.ckpt
+# !runs/**/*.csv
+# !runs/**/*.json
+# !runs/**/*.png
